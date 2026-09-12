@@ -40,3 +40,6 @@ Paths and defaults are stored in `~/.config/umu-wrapper/config.sh` and can be ov
 
 ## Notes
 This script was made in a day so I could run windows games in a sandbox.
+
+## License
+[MIT](LICENSE)
