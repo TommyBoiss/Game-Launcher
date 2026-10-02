@@ -95,13 +95,16 @@ if [[ "$NET_MODE" == "full" ]]; then
 fi
 
 # ── Build Sandbox Arguments ───────────────────────────────────────────────────
+# Re-base a GAME_ROOT path to its location inside the sandbox. The private
+# home *is* GAME_ROOT, so paths like "$GAME_ROOT/.wine-game" are visible at
+# "$HOME/.wine-game" from umu's point of view. Paths outside GAME_ROOT are
+# left untouched.
+sandbox_path() {
+  printf '%s/%s\n' "$HOME" "${1#"$GAME_ROOT"/}"
+}
+
 FJ_ARGS=(
-  --noprofile --private --private-dev
-  --whitelist="$WINEPREFIX"
-  --whitelist="$UMU_DATA"
-  --whitelist="$PROTONPATH"
-  --read-write="$WINEPREFIX"
-  --read-write="$UMU_DATA"
+  --noprofile --private="$GAME_ROOT" --private-dev
   --read-only="/usr"
   --read-only="/lib"
   --read-only="/lib64"
@@ -134,14 +137,19 @@ fi
 
 (( IGNORE_SECCOMP )) && FJ_ARGS+=(--ignore=seccomp)
 
+mkdir -p "$LOG_DIR"
+
 if (( PROTON_LOG )); then
-  mkdir -p "$LOG_DIR"
-  FJ_ARGS+=(--whitelist="$LOG_DIR" --read-write="$LOG_DIR")
   export PROTON_LOG=1
-  export PROTON_LOG_DIR="$LOG_DIR"
+  export PROTON_LOG_DIR="$(sandbox_path "$LOG_DIR")"
   export UMU_LOG=1
 fi
 
+# Re-base all game-root paths for the sandbox before umu sees them.
+PROTONPATH="$(sandbox_path "$PROTONPATH")"
+WINEPREFIX_HOST="$WINEPREFIX"
+WINEPREFIX="$(sandbox_path "$WINEPREFIX")"
+UMU_DATA="$(sandbox_path "$UMU_DATA")"
 export PROTONPATH
 export WINEPREFIX
 export XDG_DATA_HOME="$UMU_DATA"
@@ -199,12 +207,13 @@ else
 fi
 
 # ── Pre-launch Setup ──────────────────────────────────────────────────────────
-FJ_ARGS+=(--whitelist="$GAME_DIR" --read-write="$GAME_DIR")
-
-DOSDEVICES="$WINEPREFIX/dosdevices"
+# d: drive points at the game dir. A relative symlink resolves correctly in
+# both views: on the host (.wine-game/dosdevices/../.. = GAME_ROOT) and in
+# the sandbox ($HOME/.wine-game/dosdevices/../.. = $HOME).
+DOSDEVICES="$WINEPREFIX_HOST/dosdevices"
 if [[ -d "$DOSDEVICES" ]]; then
   find "$DOSDEVICES" -maxdepth 1 -type l ! -name 'c:' -delete
-  ln -sf "$GAME_DIR" "$DOSDEVICES/d:"
+  ln -sf "../../$(basename "$GAME_DIR")" "$DOSDEVICES/d:"
 fi
 
 # ── Execution ─────────────────────────────────────────────────────────────────
@@ -215,7 +224,8 @@ info "Seccomp:   $(( IGNORE_SECCOMP ? 0 : 1 ))"
 info "D-Bus:     $ALLOW_DBUS"
 echo ""
 
-firejail "${FJ_ARGS[@]}" umu-run "$game"
+GAME_SB="$(sandbox_path "$game")"
+firejail "${FJ_ARGS[@]}" umu-run "$GAME_SB"
 
 if (( PROTON_LOG )); then
   LOG_FILE="$LOG_DIR/steam-${GAMEID:-default}.log"
