@@ -25,6 +25,7 @@ NET_MODE="none"
 ALLOW_DBUS=0
 IGNORE_SECCOMP=0
 PROTON_LOG=0
+GAME_ARGS=()
 
 # ── UI Helpers ────────────────────────────────────────────────────────────────
 C_ERR='\033[1;31m'
@@ -42,7 +43,7 @@ err()   { echo -e "${C_ERR}::${C_RESET} ${C_BOLD}$1${C_RESET}" >&2; exit 1; }
 # ── Argument Parsing ──────────────────────────────────────────────────────────
 usage() {
   cat <<EOF
-${C_BOLD}Usage:${C_RESET} $(basename "$0") [OPTIONS]
+${C_BOLD}Usage:${C_RESET} $(basename "$0") [OPTIONS] [-- GAME_ARGS...]
 
 Paths (GAME_ROOT, PROTONPATH, WINEPREFIX, etc.) are read from
 $UMU_WRAPPER_CONFIG_FILE if present. Run ./init.sh to configure them
@@ -61,6 +62,9 @@ ${C_BOLD}Logging & Meta:${C_RESET}
   --proton-log       Enable Proton & UMU debug logging
   --gameid ID        Set the UMU game ID (alphanumeric, dash, underscore only)
   --help             Show this menu
+
+${C_BOLD}Game Arguments:${C_RESET}
+  --                 Everything after this is passed directly to the game
 EOF
 }
 
@@ -74,7 +78,8 @@ while [[ $# -gt 0 ]]; do
     --gameid)         [[ $# -ge 2 ]] || err "--gameid requires a value."; GAMEID="$2"; shift 2 ;;
     --gameid=*)       GAMEID="${1#*=}"; shift ;;
     --help|-h)        usage; exit 0 ;;
-    *)                err "Unknown argument: $1" ;;
+    --)               shift; GAME_ARGS=("$@"); break ;;
+    *)                err "Unknown argument: $1 (use -- to pass arguments to the game)" ;;
   esac
 done
 
@@ -222,10 +227,13 @@ ok "Starting $(basename "$game")"
 info "Network:   $NET_MODE"
 info "Seccomp:   $(( IGNORE_SECCOMP ? 0 : 1 ))"
 info "D-Bus:     $ALLOW_DBUS"
+if (( ${#GAME_ARGS[@]} > 0 )); then
+  info "Args:      ${GAME_ARGS[*]}"
+fi
 echo ""
 
 GAME_SB="$(sandbox_path "$game")"
-firejail "${FJ_ARGS[@]}" umu-run "$GAME_SB"
+firejail "${FJ_ARGS[@]}" umu-run "$GAME_SB" "${GAME_ARGS[@]}"
 
 if (( PROTON_LOG )); then
   LOG_FILE="$LOG_DIR/steam-${GAMEID:-default}.log"
