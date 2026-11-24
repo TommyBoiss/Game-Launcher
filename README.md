@@ -38,6 +38,8 @@ A sandboxed Linux game launcher using [Firejail](https://firejail.wordpress.com/
 
 Paths and defaults are stored in `~/.config/umu-wrapper/config.sh` and can be overridden per-run, e.g. `GAME_ROOT=$HOME/OtherGames ./launch-game.sh`. Re-run `./init.sh` to reconfigure.
 
+To pass arguments to the game use `-- (Game arguments)`
+
 ## Notes
 This script was made in a day so I could run windows games in a sandbox. VIBE SLOP DISCLAIMER.
 
